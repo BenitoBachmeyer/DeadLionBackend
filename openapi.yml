@@ -1,0 +1,313 @@
+openapi: 3.0.3
+info:
+  title: DeadLion Backend API
+  version: 1.0.0
+  description: >-
+    OpenAPI-Beschreibung für die aktuellen DeadLion-Backend-Endpunkte,
+    inklusive Risk Calculation und Abgaben-Berechnung.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /risk-calculation:
+    post:
+      tags:
+        - Risk Calculation
+      summary: Calculate a risk score for a customer or scenario
+      operationId: calculateRisk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskCalculationRequest'
+      responses:
+        '200':
+          description: Risk calculation completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskCalculationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /risk-calculation/{calculationId}:
+    get:
+      tags:
+        - Risk Calculation
+      summary: Get a previously calculated risk result
+      operationId: getRiskCalculation
+      parameters:
+        - $ref: '#/components/parameters/CalculationId'
+      responses:
+        '200':
+          description: Risk calculation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskCalculationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /abgaben:
+    get:
+      tags:
+        - Abgaben
+      summary: List supported abgaben categories and defaults
+      operationId: listAbgaben
+      responses:
+        '200':
+          description: Supported abgaben configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbgabenCatalogResponse'
+  /abgaben/calculate:
+    post:
+      tags:
+        - Abgaben
+      summary: Calculate abgaben for a given financial input
+      operationId: calculateAbgaben
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbgabenCalculationRequest'
+      responses:
+        '200':
+          description: Abgaben calculation completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbgabenCalculationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  parameters:
+    CalculationId:
+      name: calculationId
+      in: path
+      required: true
+      description: Unique identifier of a stored calculation result
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: invalid request payload
+        details:
+          type: array
+          items:
+            type: string
+    RiskFactor:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          example: debt_to_income_ratio
+        value:
+          type: number
+          format: float
+          example: 0.42
+        weight:
+          type: number
+          format: float
+          example: 0.3
+          description: Optional weighting factor for the input
+    RiskCalculationRequest:
+      type: object
+      required:
+        - customerId
+        - factors
+      properties:
+        customerId:
+          type: string
+          example: customer-123
+        scenario:
+          type: string
+          example: mortgage_application
+        factors:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RiskFactor'
+    RiskCalculationResponse:
+      type: object
+      required:
+        - calculationId
+        - customerId
+        - score
+        - riskLevel
+        - calculatedAt
+      properties:
+        calculationId:
+          type: string
+          format: uuid
+          example: 9d6f1e6e-13a7-4da3-86f8-73dd97bcb54c
+        customerId:
+          type: string
+          example: customer-123
+        score:
+          type: number
+          format: float
+          example: 72.4
+        riskLevel:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+          example: medium
+        recommendations:
+          type: array
+          items:
+            type: string
+          example:
+            - Request additional income verification
+            - Review outstanding liabilities
+        calculatedAt:
+          type: string
+          format: date-time
+          example: '2026-03-18T12:00:00Z'
+    AbgabeItem:
+      type: object
+      required:
+        - type
+        - amount
+      properties:
+        type:
+          type: string
+          example: einkommensteuer
+        rate:
+          type: number
+          format: float
+          example: 0.19
+        amount:
+          type: number
+          format: float
+          example: 950.0
+        currency:
+          type: string
+          example: EUR
+    AbgabenCatalogResponse:
+      type: object
+      required:
+        - categories
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            required:
+              - key
+              - label
+            properties:
+              key:
+                type: string
+                example: einkommensteuer
+              label:
+                type: string
+                example: Einkommensteuer
+              defaultRate:
+                type: number
+                format: float
+                example: 0.19
+    AbgabenCalculationRequest:
+      type: object
+      required:
+        - grossAmount
+        - currency
+        - items
+      properties:
+        grossAmount:
+          type: number
+          format: float
+          example: 5000.0
+        currency:
+          type: string
+          example: EUR
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - type
+            properties:
+              type:
+                type: string
+                example: einkommensteuer
+              customRate:
+                type: number
+                format: float
+                example: 0.19
+    AbgabenCalculationResponse:
+      type: object
+      required:
+        - grossAmount
+        - netAmount
+        - totalAbgaben
+        - currency
+        - items
+      properties:
+        grossAmount:
+          type: number
+          format: float
+          example: 5000.0
+        totalAbgaben:
+          type: number
+          format: float
+          example: 1250.0
+        netAmount:
+          type: number
+          format: float
+          example: 3750.0
+        currency:
+          type: string
+          example: EUR
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AbgabeItem'
